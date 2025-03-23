@@ -616,36 +616,17 @@ class ControllerArchon(Controller):
 
         return
 
-    def read_config_file(self, filename):
+    def read_config_file(self, filename=None):
         """
         Read Archon configuration file and parse data into dictionaries.
         """
 
-        self.config_data = []
-        self.dict_wconfig = {}
-
         # Get configuration data from the timing file
-        with open(self.timing_file, "r") as f:
-            fBuff = f.read()
-            sBuff = fBuff.split("\n")
-            fLen = len(sBuff)
+        filename = self.timing_file if filename is None else filename
 
-            # Extract CONFIG data
-            indx = 0
-            copy = 0
-            pos = 0
-
-            for line in sBuff:
-                if line == "[CONFIG]":
-                    copy = 1
-
-                indx += 1
-                if copy == 1 and indx < fLen and len(sBuff[indx]) > 0:
-                    self.config_data.append(sBuff[indx].replace("\\", "/"))
-                    self.dict_wconfig[self.config_data[pos].split("=")[0]] = pos
-                    pos += 1
-
-            self.config_lines_cnt = pos
+        self.config_data = read_timing_file(filename)
+        self.config_lines_cnt = len(self.config_data)
+        self.dict_wconfig = build_wconfig(self.config_data)
 
         azcam.log(f"Read {self.config_lines_cnt} configuration lines", level=3)
 
@@ -1759,3 +1740,110 @@ class ControllerArchon(Controller):
         self.load_params()
 
         return
+
+
+def read_timing_file(filepath, return_dict=False):
+    """ Reads an Archon NCF or ACF file and returns a list of strings.
+
+    Parses NCF/ACF file into a list of strings for uploading to Archon controller.
+    If return_dict is True, returns a dictionary of sections for manual inspection.
+    """
+
+    config_data = []
+
+    # read NCF file
+    with open(filepath, "r") as file:
+        # lines = file.readlines()
+
+        fBuff = file.read()
+        sBuff = fBuff.split("\n")
+
+        # Extract CONFIG data
+        indx = 0
+        indx_state = 0
+
+        section = None
+        dict_sections = {}
+        for line in sBuff:
+            if (len(line) > 0) and (line[0] == "["):
+                section = line[1:-1]
+
+                # Multiple STATE sections exist. Increment the section name to make it unique
+                if section == "STATE":
+                    section = section + str(indx_state)
+                    indx_state += 1
+                # Exit if we reach END condition
+                elif section == "END":
+                    break
+                line_list = []
+            else:
+                # Append and update list
+                line_list.append(line.replace("\\", "/"))
+                dict_sections[section] = line_list
+
+    if return_dict:
+        return dict_sections
+
+    # Sections are CONFIG, TIMINGSCRIPT, PARAMETERS, CONSTANTS, TAPLINES, STATE, and VCPU4
+    # For the TIMINGSCRIPT lines, we want to append "LINE{indx}=" to the string. Add separates "LINES={nlines}"
+    # For PARAMETERS, we want to append "PARAMETER{indx}=" to the string. Add separates "PARAMETERS={nparams}"
+    # For CONSTANTS, we want to append "CONSTANT{indx}=" to the string. Add separates "CONSTANTS={nconsts}"
+    # For TAPLINES, we want to append "TAPLINE{indx}=" to the string. Add separates "TAPLINES={ntaplines}"
+    # For each STATE, we want to append "STATE{N}/" to the string. Add separates "STATES={nstates}"
+
+    config_data = []
+    for section in dict_sections:
+        if 'CONFIG' in section:
+            config_data += dict_sections[section]
+        elif 'TIMINGSCRIPT' in section:
+            for indx, line in enumerate(dict_sections[section]):
+                config_data.append(f"LINE{indx}={line}")
+            config_data.append(f"LINES={indx+1}")
+        elif 'PARAMETERS' in section:
+            for indx, line in enumerate(dict_sections[section]):
+                config_data.append(f"PARAMETER{indx}={line}")
+            config_data.append(f"PARAMETERS={indx+1}")
+        elif 'CONSTANTS' in section:
+            for indx, line in enumerate(dict_sections[section]):
+                config_data.append(f"CONSTANT{indx}={line}")
+            config_data.append(f"CONSTANTS={indx+1}")
+        elif 'TAPLINES' in section:
+            for indx, line in enumerate(dict_sections[section]):
+                config_data.append(f"TAPLINE{indx}={line}")
+            config_data.append(f"TAPLINES={indx+1}")
+        elif 'STATE' in section:
+            for indx, line in enumerate(dict_sections[section]):
+                config_data.append(f"{section}/{line}")
+        else:
+            f"Skipping {section}"
+
+    # Count number of state sections
+    nstates = 0
+    for section in dict_sections:
+        if 'STATE' in section:
+            nstates += 1
+    config_data.append(f"STATES={nstates}")
+
+    # Remove any strings that are empty
+    config_data = [x for x in config_data if x]
+
+    # Sort all lines alphabetically
+    # config_data.sort()
+
+    return config_data
+
+def build_wconfig(config_data):
+    """
+    Builds a dictionary of wconfig values from a list of config data.
+    """
+
+    dict_wconfig = {}
+    for pos, line in enumerate(config_data):
+        if "=" not in line:
+            raise azcam.exceptions.AzcamError(f"Invalid config data (no '=' to split string) in line: {line}")
+        key = line.split("=")[0]
+        if key in dict_wconfig:
+            raise azcam.exceptions.AzcamError(f"Duplicate key in config data: {key}")
+        dict_wconfig[key] = pos
+
+    return dict_wconfig
