@@ -93,14 +93,10 @@ class ImageIO(object):
         except KeyError:
             self.title = ""
 
-        # check AzCam header
-        try:
-            azcam_head = hdr["AZCAM-HEAD"]
-            if azcam_head == "OK":
-                self.azcam_header = 1
-            else:
-                self.azcam_header = 0
-        except KeyError:
+        # Check AzCam header; ITL-HEAD for backward compatibility
+        if hdr.get("AZCAM-HEAD")=="OK" or hdr.get("ITL-HEAD")=="OK":
+            self.azcam_header = 1
+        else:
             self.azcam_header = 0
 
         # set Array type - output data type
