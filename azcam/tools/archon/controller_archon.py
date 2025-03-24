@@ -616,7 +616,7 @@ class ControllerArchon(Controller):
 
         return
 
-    def read_config_file(self, filename):
+    def read_config_file(self, filename=None):
         """
         Read Archon configuration file and parse data into dictionaries.
         """
@@ -625,7 +625,8 @@ class ControllerArchon(Controller):
         self.dict_wconfig = {}
 
         # Get configuration data from the timing file
-        with open(self.timing_file, "r") as f:
+        filename = self.timing_file if filename is None else filename
+        with open(filename, "r") as f:
             fBuff = f.read()
             sBuff = fBuff.split("\n")
             fLen = len(sBuff)
