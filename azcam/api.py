@@ -458,6 +458,16 @@ class API(object):
     #   temperatures
     # *************************************************************************
 
+    def get_temperature(self, temperature_id: int = 0) -> float:
+        """
+        Returns a system temperature.
+
+        Args:
+            temperature_id: temperature sensor identifier
+        """
+        
+        return self.tempcon.get_temperature(temperature_id)
+
     def get_temperatures(self) -> list[float]:
         """
         Return all system temperatures.
