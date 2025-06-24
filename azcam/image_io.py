@@ -18,9 +18,15 @@ class ImageIO(object):
     def __init__(self):
         super().__init__()
 
-    def _read_fits_file(self, filename):
+    def _read_fits_file(self, filename: str, colbias: bool = False, **kwargs):
         """
         Reads an image from a FITS or MEF disk file into the image structure.
+        Args:
+            filename: name of the FITS file to read
+            colbias: if True, apply column bias correction
+        Keyword arguments:
+            fit_order: colbias polynomial fit order, use 0 to remove median of fitted value.
+            margin_cols: number of overscan columns to skip before correction.
         """
 
         self.assembled = 0
@@ -31,6 +37,10 @@ class ImageIO(object):
         self.focalplane.header.delete_all_items()
 
         self.hdulist = pyfits.open(filename)
+        if colbias:
+            from .fits import colbias_hdulist
+            colbias_hdulist(self.hdulist, **kwargs)
+
         if len(self.hdulist) == 2:
             NumExt = 0
             first_ext = 0

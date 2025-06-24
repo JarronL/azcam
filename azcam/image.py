@@ -113,7 +113,7 @@ class Image(ImageHeaders, ImageIO):
         if filename != "":
             self.read_file(filename)
 
-    def read_file(self, filename: str):
+    def read_file(self, filename: str, colbias: bool = False, **kwargs):
         """
         Read FITS image file (standard or MEF).
         """
@@ -129,7 +129,7 @@ class Image(ImageHeaders, ImageIO):
         self.header = Header(self)  # new header
 
         # read file
-        self._read_fits_file(self.filename)
+        self._read_fits_file(self.filename, colbias=colbias, **kwargs)
 
         return
 
