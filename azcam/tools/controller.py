@@ -13,7 +13,7 @@ class Controller(Tools, ObjectHeaderMethods):
     Usually implemented as the "controller" tool.
     """
 
-    def __init__(self, tool_id: str = "controller", description: str or None = None):
+    def __init__(self, tool_id: str = "controller", description: str | None = None):
         """
         Args:
             tool_id: tool name
