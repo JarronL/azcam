@@ -14,6 +14,8 @@ import numpy
 import numpy.polynomial.polynomial as poly
 from astropy.io import fits as pyfits
 
+from azcam_console.testers import robust_stats
+
 
 def file_exists(filename: str) -> bool:
     """
@@ -31,6 +33,32 @@ def file_exists(filename: str) -> bool:
 # *******************************************************************************
 # image header commands
 # *******************************************************************************
+def get_header_section(header, section: str) -> list:
+    """
+    Returns image section pixel numbers from a FITS keyword.
+
+    Args:
+        header: image header.
+        section: section name (like "CCDSEC").
+    Returns:
+        list of zero-based pixel numbers defining the
+        section as `[first_col,last_col,first_row,last_row]`.
+    """
+
+    # get row limits
+    datasec = header[section]
+    datasec = datasec.lstrip("[")
+    datasec = datasec.split(":")
+    first_col = int(datasec[0]) - 1
+
+    datasec1 = datasec[1].split(",")
+    last_col = int(datasec1[0]) - 1
+    first_row = int(datasec1[1]) - 1
+    last_row = int(datasec[2].rstrip("]")) - 1
+
+    return [first_col, last_col, first_row, last_row]
+
+
 def get_section(filename: str, section: str, extension: int = 0) -> list:
     """
     Returns image section pixel numbers from a FITS keyword.
@@ -46,18 +74,22 @@ def get_section(filename: str, section: str, extension: int = 0) -> list:
 
     filename = azcam.utils.make_image_filename(filename)
 
-    # get row limits
-    datasec = get_keyword(filename, section, extension)
-    datasec = datasec.lstrip("[")
-    datasec = datasec.split(":")
-    first_col = int(datasec[0]) - 1
+    # # get row limits
+    # datasec = get_keyword(filename, section, extension)
+    # datasec = datasec.lstrip("[")
+    # datasec = datasec.split(":")
+    # first_col = int(datasec[0]) - 1
 
-    datasec1 = datasec[1].split(",")
-    last_col = int(datasec1[0]) - 1
-    first_row = int(datasec1[1]) - 1
-    last_row = int(datasec[2].rstrip("]")) - 1
+    # datasec1 = datasec[1].split(",")
+    # last_col = int(datasec1[0]) - 1
+    # first_row = int(datasec1[1]) - 1
+    # last_row = int(datasec[2].rstrip("]")) - 1
 
-    return [first_col, last_col, first_row, last_row]
+    # return [first_col, last_col, first_row, last_row]
+
+    header = pyfits.getheader(filename, extension)
+    return get_header_section(header, section)
+
 
 
 def get_keyword(filename: str, keyword: str, extension: int = 0) -> typing.Any:
@@ -173,6 +205,32 @@ def get_history(filename: str, extension: int = 0) -> str:
 # Image extensions
 # **************************************************************************************************
 
+def get_extensions_hdulist(hdulist):
+    """
+    Returns the number of image extensions and their indices.
+    The number of extensions is 0 for a standard FITS file and >0 for MEF.
+    The first data extension for an MEF file is 1.
+
+    Args:
+        hdulist: FITS HDUList.
+    Returns:
+        the list `[number_exts, first_ext, last_ext]` containing the number of extensions and the
+        indices for the python `range` function to iterate over them.
+    """
+
+    if "NEXTEND" in hdulist[0].header:
+        num_ext = hdulist[0].header["NEXTEND"]
+        if num_ext == 0:
+            first_ext = 0
+        else:
+            first_ext = 1
+        last_ext = num_ext + 1
+    else:
+        num_ext = 0
+        first_ext = 0
+        last_ext = 1
+
+    return [num_ext, first_ext, last_ext]
 
 def get_extensions(filename: str) -> list:
     """
@@ -189,19 +247,9 @@ def get_extensions(filename: str) -> list:
 
     filename = azcam.utils.make_image_filename(filename)
     with pyfits.open(filename) as hdulist:
-        if "NEXTEND" in hdulist[0].header:
-            num_ext = hdulist[0].header["NEXTEND"]
-            if num_ext == 0:
-                first_ext = 0
-            else:
-                first_ext = 1
-            last_ext = num_ext + 1
-        else:
-            num_ext = 0
-            first_ext = 0
-            last_ext = 1
+        res = get_extensions_hdulist(hdulist)
 
-    return [num_ext, first_ext, last_ext]
+    return res
 
 
 # **************************************************************************************************
@@ -578,10 +626,36 @@ def mean(filename: str = "test", roi: list = []) -> list:
         for chan in range(first_ext, last_ext):
             data = im[chan].data
             numpy.seterr(under="ignore")
-            mean1 = data[roi[0] : roi[1], roi[2] : roi[3]].mean()
+            mean1 = numpy.nanmean(data[roi[0] : roi[1], roi[2] : roi[3]])
             means.append(mean1)
 
     return means
+
+def median(filename: str = "test", roi: list = []) -> list:
+    """
+    Compute median of an image ROI in every extension.
+
+    Args:
+        filename: image filename.
+        roi: Region-Of-Interest.
+    Returns:
+        list of the means of each image extension or ROI in each extension.
+    """
+
+    roi = _get_data_roi(roi)
+
+    meds = []
+    filename = azcam.utils.make_image_filename(filename)
+
+    with pyfits.open(filename) as im:
+        NumExt, first_ext, last_ext = get_extensions(filename)
+        for chan in range(first_ext, last_ext):
+            data = im[chan].data
+            numpy.seterr(under="ignore")
+            med1 = numpy.nanmedian(data[roi[0] : roi[1], roi[2] : roi[3]])
+            meds.append(med1)
+
+    return meds
 
 
 def sdev(filename: str = "test", roi: list = []) -> list:
@@ -605,6 +679,31 @@ def sdev(filename: str = "test", roi: list = []) -> list:
         for chan in range(first_ext, last_ext):
             data = im[chan].data
             sdev1 = data[roi[0] : roi[1], roi[2] : roi[3]].std()
+            sdevs.append(sdev1)
+
+    return sdevs
+
+def medabsdev(filename: str = "test", roi: list = []) -> list:
+    """
+    Compute standard deviation of an image ROI in every extension.
+
+    Args:
+        filename: image filename.
+        roi: Region-Of-Interest.
+    Returns:
+        list of the standard deviations of each image extension or ROI in each extension.
+    """
+
+    roi = _get_data_roi(roi)
+
+    filename = azcam.utils.make_image_filename(filename)
+
+    with pyfits.open(filename) as im:
+        sdevs = []
+        NumExt, first_ext, last_ext = get_extensions(filename)
+        for chan in range(first_ext, last_ext):
+            data = im[chan].data
+            sdev1 = robust_stats.medabsdev(data[roi[0] : roi[1], roi[2] : roi[3]])
             sdevs.append(sdev1)
 
     return sdevs
@@ -779,6 +878,97 @@ def _bin_ndarray(ndarray, new_shape, operation="sum"):
         ndarray = op(-1 * (i + 1))
     return ndarray
 
+def colbias_hdulist(hdulist, fit_order: int = 3, margin_cols: int = 0) -> None:
+    """
+    Remove column bias from a FITS HDUList. Updates the HDUList in place.
+    This function is used to remove the bias from the overscan region of a CCD image.
+
+    Args:
+        hdulist: image HDUList.
+        fit_order: polynomial fit order, use 0 to remove median of fitted value.
+        margin_cols: number of overscan columns to skip before correction.
+    """
+
+    # if already COLBIAS then exit here
+    try:
+        history = hdulist[0].header["History"]
+        for h in history:
+            h = repr(h)
+            if "COLBIAS" in h:
+                return
+            else:
+                pass
+    except KeyError:
+        pass
+
+    numexts, firstext, lastext = get_extensions_hdulist(hdulist)
+
+    # find column median value
+    if numexts == 0:
+        Median = []
+    else:
+        Median = [[]]  # skip phdu
+
+    # get overscan info
+    hdr1 = hdulist[firstext].header
+    reply = hdr1['OVRSCAN2']
+    if isinstance(reply, str):
+        overscanrows = 0
+    else:
+        overscanrows = int(reply)
+    col1, col2, row1, row2 = get_header_section(hdr1, "BIASSEC")
+    col1 += 1
+
+    col1 += margin_cols
+
+    col2 -= 1
+    row2 += overscanrows
+
+    for i in range(firstext, lastext):
+        # make data float32 for calculations
+        hdulist[i].data = hdulist[i].data.astype("float32")
+
+        Median.append([])  # first hdu will be 1
+        for row in range(row1, row2 + 1):
+            Median[i].append(
+                numpy.median(hdulist[i].data[row : row + 1, col1 : col2 + 1])
+            )
+
+        if fit_order > 0:
+            slope, xdata, yfit, resids, residspercent = _line_fit(
+                list(range(row1, row2 + 1)), Median[i], fit_order
+            )
+            yfit = yfit.astype("float32")
+        else:
+            yfit = numpy.array(Median)
+
+        # correct data by subtracting row by row best fit
+        for row in range(row1, row2 + 1):
+            if fit_order > 0:
+                hdulist[i].data[row : row + 1] -= yfit[row]  # wraps here
+            else:
+                hdulist[i].data[row : row + 1] -= Median[i][row]
+
+        # convert back to uint16, clipping to zero
+        # hdulist[i].data=hdulist[i].data.clip(min=0)
+        # hdulist[i].data=hdulist[i].data.astype('uint16')
+
+    # new due to lock
+    history_string = "COLBIAS data was column overscan corrected"
+    value = (
+        time.strftime("%Y/%m/%d %H:%M:%S ", time.gmtime(time.time()))
+        + history_string
+    )
+    if len(value) > 70:
+        value = value[:70] + "\n" + value[70:]
+    if len(value) > 141:
+        value = value[:141] + "\n" + value[141:]
+    if len(value) > 212:
+        value = value[:212]
+    hdulist[0].header.add_history(value)
+
+    return
+
 
 def colbias(filename: str = "test", fit_order: int = 3, margin_cols: int = 0) -> None:
     """
@@ -786,7 +976,7 @@ def colbias(filename: str = "test", fit_order: int = 3, margin_cols: int = 0) ->
 
     Args:
         filename: image filename.
-        fit_order: polynomial fit order, use 0 to remove median not fitted value.
+        fit_order: polynomial fit order, use 0 to remove median of fitted value.
         margin_cols: number of overscan columns to skip before correction.
     """
 
@@ -794,82 +984,84 @@ def colbias(filename: str = "test", fit_order: int = 3, margin_cols: int = 0) ->
 
     # open image and get data
     with pyfits.open(filename, mode="update") as im:
-        # if already COLBIAS then exit here
-        try:
-            history = im[0].header["History"]
-            for h in history:
-                h = repr(h)
-                if "COLBIAS" in h:
-                    return
-                else:
-                    pass
-        except KeyError:
-            pass
+        colbias_hdulist(im, fit_order=fit_order, margin_cols=margin_cols)
 
-        numexts, firstext, lastext = get_extensions(filename)
+        # # if already COLBIAS then exit here
+        # try:
+        #     history = im[0].header["History"]
+        #     for h in history:
+        #         h = repr(h)
+        #         if "COLBIAS" in h:
+        #             return
+        #         else:
+        #             pass
+        # except KeyError:
+        #     pass
 
-        # find column median value
-        if numexts == 0:
-            Median = []
-        else:
-            Median = [[]]  # skip phdu
+        # numexts, firstext, lastext = get_extensions(filename)
 
-        # get overscan info
-        reply = get_keyword(filename, "OVRSCAN2", firstext)
-        if isinstance(reply, str):
-            overscanrows = 0
-        else:
-            overscanrows = int(reply)
-        col1, col2, row1, row2 = get_section(filename, "BIASSEC", firstext)
-        col1 += 1
+        # # find column median value
+        # if numexts == 0:
+        #     Median = []
+        # else:
+        #     Median = [[]]  # skip phdu
 
-        col1 += margin_cols
+        # # get overscan info
+        # reply = get_keyword(filename, "OVRSCAN2", firstext)
+        # if isinstance(reply, str):
+        #     overscanrows = 0
+        # else:
+        #     overscanrows = int(reply)
+        # col1, col2, row1, row2 = get_section(filename, "BIASSEC", firstext)
+        # col1 += 1
 
-        col2 -= 1
-        row2 += overscanrows
+        # col1 += margin_cols
 
-        for i in range(firstext, lastext):
-            # make data float32 for calculations
-            im[i].data = im[i].data.astype("float32")
+        # col2 -= 1
+        # row2 += overscanrows
 
-            Median.append([])  # first hdu will be 1
-            for row in range(row1, row2 + 1):
-                Median[i].append(
-                    numpy.median(im[i].data[row : row + 1, col1 : col2 + 1])
-                )
+        # for i in range(firstext, lastext):
+        #     # make data float32 for calculations
+        #     im[i].data = im[i].data.astype("float32")
 
-            if fit_order > 0:
-                slope, xdata, yfit, resids, residspercent = _line_fit(
-                    list(range(row1, row2 + 1)), Median[i], fit_order
-                )
-                yfit = yfit.astype("float32")
-            else:
-                yfit = numpy.array(Median)
+        #     Median.append([])  # first hdu will be 1
+        #     for row in range(row1, row2 + 1):
+        #         Median[i].append(
+        #             numpy.median(im[i].data[row : row + 1, col1 : col2 + 1])
+        #         )
 
-            # correct data by subtracting row by row best fit
-            for row in range(row1, row2 + 1):
-                if fit_order > 0:
-                    im[i].data[row : row + 1] -= yfit[row]  # wraps here
-                else:
-                    im[i].data[row : row + 1] -= Median[i][row]
+        #     if fit_order > 0:
+        #         slope, xdata, yfit, resids, residspercent = _line_fit(
+        #             list(range(row1, row2 + 1)), Median[i], fit_order
+        #         )
+        #         yfit = yfit.astype("float32")
+        #     else:
+        #         yfit = numpy.array(Median)
 
-            # convert back to uint16, clipping to zero
-            # im[i].data=im[i].data.clip(min=0)
-            # im[i].data=im[i].data.astype('uint16')
+        #     # correct data by subtracting row by row best fit
+        #     for row in range(row1, row2 + 1):
+        #         if fit_order > 0:
+        #             im[i].data[row : row + 1] -= yfit[row]  # wraps here
+        #         else:
+        #             im[i].data[row : row + 1] -= Median[i][row]
 
-        # new due to lock
-        history_string = "COLBIAS data was column overscan corrected"
-        value = (
-            time.strftime("%Y/%m/%d %H:%M:%S ", time.gmtime(time.time()))
-            + history_string
-        )
-        if len(value) > 70:
-            value = value[:70] + "\n" + value[70:]
-        if len(value) > 141:
-            value = value[:141] + "\n" + value[141:]
-        if len(value) > 212:
-            value = value[:212]
-        im[0].header.add_history(value)
+        #     # convert back to uint16, clipping to zero
+        #     # im[i].data=im[i].data.clip(min=0)
+        #     # im[i].data=im[i].data.astype('uint16')
+
+        # # new due to lock
+        # history_string = "COLBIAS data was column overscan corrected"
+        # value = (
+        #     time.strftime("%Y/%m/%d %H:%M:%S ", time.gmtime(time.time()))
+        #     + history_string
+        # )
+        # if len(value) > 70:
+        #     value = value[:70] + "\n" + value[70:]
+        # if len(value) > 141:
+        #     value = value[:141] + "\n" + value[141:]
+        # if len(value) > 212:
+        #     value = value[:212]
+        # im[0].header.add_history(value)
 
     return
 
