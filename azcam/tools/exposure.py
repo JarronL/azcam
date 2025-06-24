@@ -277,7 +277,8 @@ class Exposure(Tools, Filename, ObjectHeaderMethods):
         old_exposuretime = self.exposure_time
         self.test_image = 1
 
-        if shutter:
+        shutter = int(shutter)
+        if shutter==1:
             shutter_state = "object"
         else:
             shutter_state = "dark"
