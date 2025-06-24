@@ -56,9 +56,9 @@ class ExposureArchon(Exposure):
         if self.exposure_flag != self.exposureflags["NONE"]:
             self.exposure_flag = self.exposureflags["READ"]
 
-        azcam.db.tools["controller"].archon_command("FASTLOADPARAM StopExposure 1")
+        azcam.db.tools["controller"].fastloadparam("StopExposure", 1)
         time.sleep(0.1)
-        azcam.db.tools["controller"].archon_command("FASTLOADPARAM StopExposure 0")
+        azcam.db.tools["controller"].fastloadparam("StopExposure", 0)
 
         return
 
@@ -96,7 +96,9 @@ class ExposureArchon(Exposure):
         if self.image_type == "zero":
             self.exposure_time = self.exposure_time_saved
 
-        self.exposure_flag == self.exposureflags["READ"]
+        # This doesn't do anything because it is "==" not "=" [JML 2025-06-19]
+        # In any case, readout is handled in self.end() rather than self.readout() (which is an empty function)
+        # self.exposure_flag == self.exposureflags["READ"]
 
         # azcam.log("Integration finished", level=2)
 
@@ -106,6 +108,8 @@ class ExposureArchon(Exposure):
         """
         Completes an exposure by writing file and displaying image.
         """
+
+        controller = azcam.db.tools["controller"]
 
         self.exposure_flag = self.exposureflags["WRITING"]
 
@@ -126,32 +130,19 @@ class ExposureArchon(Exposure):
         self.pixels_remaining = 0
 
         # create buffer for entire image, including all overscans
-        self.image.data = numpy.empty(
-            shape=(
-                self.image.focalplane.numamps_image,
-                self.image.focalplane.numcols_amp * self.image.focalplane.numrows_amp,
-            ),
-            dtype="uint16",
-        )
+        namps = self.image.focalplane.numamps_image
+        ncols, nrows = (self.image.focalplane.numcols_amp, self.image.focalplane.numrows_amp)
+        self.image.data = numpy.empty(shape=([namps, ncols*nrows]), dtype="uint16" )
 
-        self.fileconverter.copy_to_buffer(
-            azcam.db.tools["controller"].imagedata, self.image.data
-        )
+        self.fileconverter.copy_to_buffer(controller.imagedata, self.image.data)
         self.image.is_valid = 1
 
         # write MEF file
         self.image.overwrite = self.overwrite
         self.image.test_image = self.test_image
 
-        azcam.db.tools["controller"].set_keyword(
-            "INTMS", self.fileconverter.intms, "Open shutter exposure time (ms)", "int"
-        )
-        azcam.db.tools["controller"].set_keyword(
-            "NOINTMS",
-            self.fileconverter.nointms,
-            "Closed shutter exposure time (ms)",
-            "int",
-        )
+        controller.set_keyword("INTMS",   self.fileconverter.intms,    "Open shutter exposure time (ms)",   "int")
+        controller.set_keyword("NOINTMS", self.fileconverter.nointms,  "Closed shutter exposure time (ms)", "int")
 
         # update controller header with keywords which might have changed
         et = float(int(self.exposure_time_actual * 1000.0) / 1000.0)
@@ -168,7 +159,7 @@ class ExposureArchon(Exposure):
 
         # add info data in extra extensions
         if self.add_extensions:
-            azcam.db.tools["controller"].get_status()  # get current controller data
+            controller.get_status()  # get current controller data
 
             # create data arrays
             keywords = []
@@ -176,9 +167,9 @@ class ExposureArchon(Exposure):
             datatypes = []
             units = []
             comments = []
-            for key in azcam.db.tools["controller"].dict_status:
+            for key in controller.dict_status:
                 keywords.append(key)
-                values.append(azcam.db.tools["controller"].dict_status[key])
+                values.append(controller.dict_status[key])
                 datatypes.append("datatype")
                 units.append("unit")
                 comments.append("comment")
@@ -228,16 +219,18 @@ class ExposureArchon(Exposure):
         Set current exposure time in seconds.
         """
 
+        controller = azcam.db.tools["controller"]
+
         self.exposure_time = float(exposure_time)
         self.exposure_time_actual = self.exposure_time  # may be changed later
 
         if self.image_type == "zero":
-            azcam.db.tools["controller"].set_exposuretime(0)
-            azcam.db.tools["controller"].set_no_int_ms(0)
+            controller.set_exposuretime(0)
+            controller.set_no_int_ms(0)
             return
 
         # set timer and for header keyword
-        azcam.db.tools["controller"].set_exposuretime(int(self.exposure_time * 1000))
+        controller.set_exposuretime(int(self.exposure_time * 1000))
 
         # get shutter state
         try:
@@ -246,12 +239,12 @@ class ExposureArchon(Exposure):
             shutterstate = 1  # other types are comps, so open shutter
 
         if shutterstate:
-            azcam.db.tools["controller"].set_int_ms(int(self.exposure_time * 1000))
-            # azcam.db.tools["controller"].set_no_int_ms(0)
-            azcam.db.tools["controller"].set_no_int_ms(self.shutter_delay)
+            controller.set_int_ms(int(self.exposure_time * 1000))
+            # controller.set_no_int_ms(0)
+            controller.set_no_int_ms(self.shutter_delay)
         else:
-            azcam.db.tools["controller"].set_no_int_ms(int(self.exposure_time * 1000))
-            azcam.db.tools["controller"].set_int_ms(0)
+            controller.set_no_int_ms(int(self.exposure_time * 1000))
+            controller.set_int_ms(0)
 
         return
 
