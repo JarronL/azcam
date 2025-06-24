@@ -508,6 +508,15 @@ class API(object):
     #   instruments
     # *************************************************************************
 
+    def use_mono_shutter(self, value: int = 0):
+        """
+        Set whether to use the monochromator shutter (if implemented).
+        If value=1 (True), the monochromator shutter will be used.
+        If value=0 (False), the arduino shutter will be used.
+        """
+
+        return self.instrument.use_mono_shutter(value)
+
     def get_filters(self, filter_id=0):
         """
         Return a list of all available/loaded filters.

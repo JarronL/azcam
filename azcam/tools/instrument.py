@@ -253,6 +253,15 @@ class Instrument(Tools, ObjectHeaderMethods):
     # ***************************************************************************
     # shutter
     # ***************************************************************************
+    def use_mono_shutter(self, value: int=0):
+        """
+        Set whether to use the monochromator shutter.
+        If state=1 (True), the monochromator shutter will be used.
+        If state=0 (False), the arduino shutter will be used.
+        """
+
+        raise NotImplementedError
+
     def set_shutter(self, state, shutter_id=0):
         """
         Open or close the instrument shutter.

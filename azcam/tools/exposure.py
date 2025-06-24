@@ -307,6 +307,7 @@ class Exposure(Tools, Filename, ObjectHeaderMethods):
         self.start()
 
         azcam.log("Exposure started")
+        self.completed = 0
 
         # if last exposure was aborted, warn before clearing flag
         if self.exposure_flag == self.exposureflags["ABORT"]:
@@ -537,10 +538,9 @@ class Exposure(Tools, Filename, ObjectHeaderMethods):
         else:
             if not self.guide_mode:
                 try:
-                    if (azcam.db.tools["instrument"] is not None) and azcam.db.tools[
-                        "instrument"
-                    ].is_enabled:
-                        azcam.db.tools["instrument"].set_comps()  # reset
+                    inst = azcam.db.tools["instrument"]
+                    if (inst is not None) and inst.is_enabled:
+                        inst.set_comps()  # reset
                 except KeyError:
                     pass
                 self.set_keyword("IMAGETYP", imagetype, "Image type", "str")

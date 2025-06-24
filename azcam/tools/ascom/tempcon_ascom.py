@@ -32,7 +32,7 @@ class TempConASCOM(TempCon):
 
     def initialize(self):
         """
-        Initialize CryoConM24TemperatureControl temperature controller.
+        Initialize ASCOM temperature controller.
         """
 
         if self.is_initialized:
@@ -42,7 +42,15 @@ class TempConASCOM(TempCon):
             return
 
         # set control temp
-        self.set_control_temperature(self.control_temperature)
+        try:
+            self.set_control_temperature(self.control_temperature)
+        except:
+            self.is_initialized = 0
+            azcam.exceptions.warning(
+                f"Error setting control temperature for device. Is it powered and connected?"
+            )
+            return
+
 
         self.is_initialized = 1
 
