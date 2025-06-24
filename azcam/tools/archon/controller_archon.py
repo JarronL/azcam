@@ -1442,8 +1442,8 @@ class ControllerArchon(Controller):
         # Set exposure state to UNKNOWN
         self.archon_status = self.EXP_UNKNOWN
 
-        # Check frame status
-        self.get_frame()
+        # Check frame status; sets self.dict_frame
+        _ = self.get_frame()
 
         # Save current frame numbers
         self.currframe1 = self.dict_frame["BUF1FRAME"]
@@ -1460,7 +1460,7 @@ class ControllerArchon(Controller):
         self.exp_start = time.time()
 
         # Exposure start time (internal Archon controller timer - resolution 10 ns)
-        self.get_frame()
+        _ = self.get_frame()
         self.exp_timer = int(self.dict_frame["TIMER"], 16)
 
         int_time = (int(self.int_ms) + int(self.noint_ms)) / 1000
@@ -1474,10 +1474,9 @@ class ControllerArchon(Controller):
         stop = 0
         self.newframe = 0
 
-        # Set exposure flag to INTEGRATING
-        azcam.db.tools["exposure"].exposure_flag = azcam.db.tools[
-            "exposure"
-        ].exposureflags["EXPOSING"]
+        # Set exposure flag to EXPOSING
+        exposure = azcam.db.tools["exposure"]
+        exposure.exposure_flag = exposure.exposureflags["EXPOSING"]
 
         # wait for frame to change in buffers
         if int_time > 0:
@@ -1504,10 +1503,7 @@ class ControllerArchon(Controller):
                 # azcam.log(f"Integrating: {(time.time() - self.exp_start):.1f} secs", level=2)
 
             # check for abort
-            if (
-                azcam.db.tools["exposure"].exposure_flag
-                == azcam.db.tools["exposure"].exposureflags["ABORT"]
-            ):
+            if (exposure.exposure_flag == exposure.exposureflags["ABORT"]):
                 stop = 1
 
             # Check if time out occured
@@ -1521,18 +1517,13 @@ class ControllerArchon(Controller):
                 time.sleep(0.5)
 
         # check for abort
-        if (
-            azcam.db.tools["exposure"].exposure_flag
-            == azcam.db.tools["exposure"].exposureflags["ABORT"]
-        ):
+        if (exposure.exposure_flag == exposure.exposureflags["ABORT"]):
             self.archon_status = self.EXP_DONE
             azcam.exceptions.warning("Exposure aborted")
             return
 
         # Set exposure flag to READOUT
-        azcam.db.tools["exposure"].exposure_flag = azcam.db.tools[
-            "exposure"
-        ].exposureflags["READOUT"]
+        exposure.exposure_flag = exposure.exposureflags["READOUT"]
 
         self.read_buffer = self.newframe
 
@@ -1565,10 +1556,7 @@ class ControllerArchon(Controller):
                 )
 
             # check for abort
-            if (
-                azcam.db.tools["exposure"].exposure_flag
-                == azcam.db.tools["exposure"].exposureflags["ABORT"]
-            ):
+            if (exposure.exposure_flag == exposure.exposureflags["ABORT"]):
                 dataReady = -1
                 break
 
@@ -1580,7 +1568,7 @@ class ControllerArchon(Controller):
             et = (t2 - t1) / 1.0e8
         elif self.noint_ms > 0:
             et = self.noint_ms / 1000.0
-        azcam.db.tools["exposure"].exposure_time_actual = et
+        exposure.exposure_time_actual = et
 
         if dataReady == 1:
             self.archon_status = self.EXP_DONE
