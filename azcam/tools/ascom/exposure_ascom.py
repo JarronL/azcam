@@ -42,8 +42,7 @@ class ExposureASCOM(Exposure):
                 azcam.db.tools["instrument"].comps_off()
 
         # start exposure
-        if imagetype != "zero":
-            azcam.log("Integration started")
+        azcam.log(f"Starting {imagetype} exposure")
 
         self.exp_start = time.time()
         self.dark_time_start = self.exp_start
@@ -73,7 +72,6 @@ class ExposureASCOM(Exposure):
         """
         Exposure readout.
         """
-
         self.exposure_flag = self.exposureflags["READOUT"]
 
         # wait for readout
@@ -105,19 +103,14 @@ class ExposureASCOM(Exposure):
         Completes an exposure by writing file and displaying image.
         """
 
+        controller = azcam.db.tools["controller"]
+
         # this can be slow for big image
         # ASCOM fills array Y then X do transpose
         self.image.transposed_image = 1
-        # size = azcam.db.tools["controller"].camera.NumX * azcam.db.tools["controller"].camera.NumY  # can be wrong
-        size = (
-            azcam.db.tools["controller"].detpars.numcols_image
-            * azcam.db.tools["controller"].detpars.numrows_image
-        )
-        self.image.data[0] = (
-            numpy.array(azcam.db.tools["controller"].camera.ImageArray)
-            .reshape(size)
-            .astype("uint16")
-        )
+        # size = controller.camera.NumX * controller.camera.NumY  # can be wrong
+        ncols, nrows = (controller.detpars.numcols_image, controller.detpars.numrows_image)
+        self.image.data[0] = numpy.array(controller.camera.ImageArray).reshape([ncols*nrows]).astype("uint16")
 
         self.exposure_flag = self.exposureflags["WRITING"]
 
