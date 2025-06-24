@@ -9,6 +9,7 @@ import numpy
 import azcam
 from azcam.tools.exposure import Exposure
 
+from tqdm import trange, tqdm
 
 class ExposureASCOM(Exposure):
     """
@@ -49,7 +50,26 @@ class ExposureASCOM(Exposure):
         azcam.db.tools["controller"].start_exposure()
 
         # wait for integration
-        time.sleep(self.exposure_time)
+        time_remaining = self.get_exposuretime_remaining()
+        if time_remaining < 2:
+            time.sleep(time_remaining)
+        else:
+            # if time remaining is more than 2 seconds, use tqdm for progress bar
+            # Update every 1 second
+            ticks = int(time_remaining)
+            abort = False
+            for i in trange(ticks, desc="Integrating", unit="s", leave=False):
+                if self.get_exposuretime_remaining() < 1:
+                    break
+                elif self.exposure_flag == self.exposureflags["ABORT"]:
+                    abort = True
+                    break
+                else:
+                    time.sleep(1)
+
+            # wait for any remaining time
+            if not abort:
+                time.sleep(self.get_exposuretime_remaining())  
 
         # exposure finished
         if imagetype == "zero":
