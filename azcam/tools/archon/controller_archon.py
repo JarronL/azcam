@@ -13,6 +13,7 @@ import azcam.exceptions
 import azcam.sockets
 from azcam.tools.controller import Controller
 
+from tqdm import tqdm, trange
 
 class ControllerArchon(Controller):
     """
@@ -1437,6 +1438,9 @@ class ControllerArchon(Controller):
     def start_exposure(self, wait=1):
         """
         Start exposure.
+
+        Parameters:
+            wait (int): If 1, wait for exposure to finish. If 0, just start exposure and return.
         """
 
         # Set exposure state to UNKNOWN
@@ -1479,42 +1483,49 @@ class ControllerArchon(Controller):
         exposure.exposure_flag = exposure.exposureflags["EXPOSING"]
 
         # wait for frame to change in buffers
-        if int_time > 0:
-            azcam.log("Integrating", level=1)
-        while stop == 0:
-            # Get frame and update frame dictionary
-            self.get_frame()
+        # if int_time > 0:
+        #     azcam.log("Integrating", level=1)
 
-            # Check in a new frame is available
-            if self.currframe1 != self.dict_frame["BUF1FRAME"]:
-                self.newframe = 1
-                stop = 1
+        int_time_msec = int(int_time * 1000)
+        with tqdm(total=int_time_msec, desc="Integrating", unit="msec") as pbar:
+            ttemp = time.time()
+            while stop == 0:
+                # Get frame and update frame dictionary
+                self.get_frame()
 
-            if self.currframe2 != self.dict_frame["BUF2FRAME"]:
-                self.newframe = 2
-                stop = 1
+                # Check in a new frame is available
+                if self.currframe1 != self.dict_frame["BUF1FRAME"]:
+                    self.newframe = 1
+                    stop = 1
 
-            if self.currframe3 != self.dict_frame["BUF3FRAME"]:
-                self.newframe = 3
-                stop = 1
+                if self.currframe2 != self.dict_frame["BUF2FRAME"]:
+                    self.newframe = 2
+                    stop = 1
 
-            if int_time > 0:
-                pass
-                # azcam.log(f"Integrating: {(time.time() - self.exp_start):.1f} secs", level=2)
+                if self.currframe3 != self.dict_frame["BUF3FRAME"]:
+                    self.newframe = 3
+                    stop = 1
 
-            # check for abort
-            if (exposure.exposure_flag == exposure.exposureflags["ABORT"]):
-                stop = 1
+                if int_time > 0:
+                    pass
+                    # azcam.log(f"Integrating: {(time.time() - self.exp_start):.1f} secs", level=2)
 
-            # Check if time out occured
-            if not stop:
-                if 0:  # 0 is no timeout
-                    if time.time() > (self.frame_time + int_time + 90):  # long for 10k
-                        self.newframe = -1
-                        self.read_buffer = -1
-                        azcam.exceptions.warning("Timed out waiting for integration")
-                        stop = 1
-                time.sleep(0.5)
+                # check for abort
+                if (exposure.exposure_flag == exposure.exposureflags["ABORT"]):
+                    stop = 1
+
+                # Check if time out occured
+                if not stop:
+                    if 0:  # 0 is no timeout
+                        if time.time() > (self.frame_time + int_time + 90):  # long for 10k
+                            self.newframe = -1
+                            self.read_buffer = -1
+                            azcam.exceptions.warning("Timed out waiting for integration")
+                            stop = 1
+                    time_elapsed_msec = int((time.time() - ttemp) * 1000)
+                    pbar.update(time_elapsed_msec)
+                    ttemp = time.time()
+                    time.sleep(0.5)
 
         # check for abort
         if (exposure.exposure_flag == exposure.exposureflags["ABORT"]):
