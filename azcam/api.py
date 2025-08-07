@@ -109,7 +109,7 @@ class API(object):
 
         Args:
             exposure_time: exposure time in seconds
-            imagetype: type of exposure ('zero', 'object', 'flat', ...)
+            imagetype: type of exposure ('zero', 'dark','object', 'flat', ...)
             title: image title.
         """
 
@@ -123,7 +123,7 @@ class API(object):
 
         Args:
             exposure_time: exposure time in seconds
-            image_type: type of exposure ('zero', 'object', 'flat', ...)
+            image_type: type of exposure ('zero', 'dark', 'object', 'flat', ...)
             image_title: image title, usually surrounded by double quotes
         """
 

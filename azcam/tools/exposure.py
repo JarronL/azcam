@@ -295,7 +295,7 @@ class Exposure(Tools, Filename, ObjectHeaderMethods):
         """
         Make a complete exposure.
         exposure_time is the exposure time in seconds
-        imagetype is the type of exposure ('zero', 'object', 'flat', ...)
+        imagetype is the type of exposure ('zero', 'dark','object', 'flat', ...)
         title is the image title.
         """
 
@@ -351,7 +351,7 @@ class Exposure(Tools, Filename, ObjectHeaderMethods):
         Make a complete exposure with immediate return to caller.
 
         :param exposure_time: the exposure time in seconds
-        :param image_type: type of exposure ('zero', 'object', 'flat', ...)
+        :param image_type: type of exposure ('zero', 'dark', 'object', 'flat', ...)
         :param image_title: image title, usually surrounded by double quotes
         """
 
