@@ -87,9 +87,10 @@ class ExposureArchon(Exposure):
 
         # turn off comp lamps
         if self.comp_exposure:
-            if not azcam.db.tools["instrument"].shutter_strobe:
-                azcam.db.tools["instrument"].comps_off()
-            azcam.db.tools["instrument"].set_comps("shutter")
+            instrument = azcam.db.tools["instrument"]
+            if not instrument.shutter_strobe:
+                instrument.comps_off()
+            instrument.set_comps("shutter")
 
         # set times
         self.exposure_time_remaining = 0
