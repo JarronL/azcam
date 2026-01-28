@@ -70,7 +70,7 @@ class TempConCryoCon24(TempCon):
         try:
             self.server.command("*IDN?;")
         except socket.timeout as e:
-            azcam.exceptions.warning("Could not query temperature controller: {e}")
+            azcam.exceptions.warning(f"Could not query temperature controller: {e}")
             return
 
         # set PID mode
